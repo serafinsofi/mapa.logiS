@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa con rutas y hasta 15 ubicaciones</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"/>
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; }
+    #map { height: 100%; width: 100%; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 8px;
+      border-radius: 6px;
+      box-shadow: 0 0 6px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <button onclick="borrarUbicaciones()">Borrar ubicaciones</button>
+  </div>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+  <script>
+    var map = L.map('map').setView([19.4326, -99.1332], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    var markers = [];
+    var markerObjs = [];
+    var routeLine;
+
+    var geocoder = L.Control.geocoder({
+      defaultMarkGeocode: false
+    })
+    .on('markgeocode', function(e) {
+      if (markers.length >= 15) {
+        alert("¡Ya has agregado 15 ubicaciones!");
+        return;
+      }
+
+      var latlng = e.geocode.center;
+      var marker = L.marker(latlng).addTo(map)
+        .bindPopup(e.geocode.name).openPopup();
+
+      markers.push(latlng);
+      markerObjs.push(marker);
+
+      if (markers.length >= 2) {
+        calcularRuta();
+      }
+    }).addTo(map);
+
+    function calcularRuta() {
+      if (routeLine) {
+        map.removeLayer(routeLine);
+      }
+
+      var coords = markers.map(m => [m.lng, m.lat]);
+
+      fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json, application/geo+json',
+          'Authorization': '5b3ce3597851110001cf62487dfd22c9b01c438e8201c6f9e0694a4e', // ← Reemplaza con tu key
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          coordinates: coords,
+          optimize_waypoints: true
+        })
+      })
+      .then(response => response.json())
+      .then(json => {
+        routeLine = L.geoJSON(json, { style: { color: 'blue', weight: 5 } }).addTo(map);
+        map.fitBounds(routeLine.getBounds());
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Error calculando la ruta");
+      });
+    }
+
+    function borrarUbicaciones() {
+      // Borrar marcadores del mapa
+      markerObjs.forEach(m => map.removeLayer(m));
+      markerObjs = [];
+      markers = [];
+
+      // Borrar ruta si existe
+      if (routeLine) {
+        map.removeLayer(routeLine);
+        routeLine = null;
+      }
+    }
+  </script>
+</body>
+</html>
+
